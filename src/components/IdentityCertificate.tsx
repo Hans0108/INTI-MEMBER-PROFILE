@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, ShieldCheck, Calendar, User as UserIcon } from 'lucide-react';
-import { Member, MembershipStatus } from '../types';
+import { Member, MembershipStatus, UserRole } from '../types';
 import { formatDate, cn } from '../lib/utils';
 
 interface IdentityCertificateProps {
@@ -67,7 +67,9 @@ export function IdentityCertificate({ member, showStatus = true }: IdentityCerti
           </h2>
           
           <p className="text-slate-400 text-xs font-semibold tracking-[0.2em] uppercase mb-8">
-            Premium Tier Member
+            {member.role === UserRole.SUPER_ADMIN ? 'Universal Super Admin' : 
+             member.role === UserRole.ADMIN ? 'Regional Protocol Admin' : 
+             'Premium Tier Member'}
           </p>
 
           <div className="w-full h-px bg-slate-100 mb-8" />

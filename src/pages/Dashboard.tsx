@@ -37,7 +37,7 @@ interface DashboardProps {
 
 export default function Dashboard({ user, role, member }: DashboardProps) {
   const navigate = useNavigate();
-  const isAdmin = role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+  const isSuperAdmin = role === UserRole.SUPER_ADMIN;
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -63,7 +63,7 @@ export default function Dashboard({ user, role, member }: DashboardProps) {
         </div>
 
         <div className="flex items-center gap-6">
-          {isAdmin && (
+          {isSuperAdmin && (
             <div className="flex bg-brand-cream px-2 py-1 rounded-xl border border-brand-gold/20 mr-4">
               <button 
                 onClick={() => setActiveTab('admin')}
@@ -72,7 +72,7 @@ export default function Dashboard({ user, role, member }: DashboardProps) {
                   activeTab === 'admin' ? "bg-brand-red text-white shadow-lg" : "text-slate-400 hover:text-brand-gold"
                 )}
               >
-                {role === UserRole.SUPER_ADMIN ? 'Registry Command' : 'Management'}
+                Registry Command
               </button>
               <button 
                 onClick={() => setActiveTab('member')}
@@ -99,7 +99,7 @@ export default function Dashboard({ user, role, member }: DashboardProps) {
       </nav>
 
       <main className="relative z-10 max-w-[1400px] mx-auto px-8 py-10">
-        {isAdmin && activeTab === 'admin' ? (
+        {isSuperAdmin && activeTab === 'admin' ? (
           <AdminView userRole={role} />
         ) : (
           <MemberView member={member} email={user.email} />
@@ -700,6 +700,16 @@ function AdminView({ userRole }: { userRole: UserRole | null }) {
                                >
                                  <ShieldCheck className="w-4 h-4" />
                                </button>
+                               <button 
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   setSelectedMember(m);
+                                 }}
+                                 className="p-2 hover:bg-brand-cream/60 rounded-lg text-brand-ink transition-all"
+                                 title="Quick QR View"
+                                >
+                                  <QrCode className="w-4 h-4" />
+                                </button>
                                <button 
                                  onClick={(e) => {
                                    e.stopPropagation();

@@ -54,7 +54,7 @@ export default function App() {
         <Route path="/verify/:slug" element={<Verify />} />
         <Route 
           path="/print" 
-          element={role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN ? <PrintView /> : <Navigate to="/" />} 
+          element={role === UserRole.SUPER_ADMIN ? <PrintView /> : <Navigate to="/" />} 
         />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

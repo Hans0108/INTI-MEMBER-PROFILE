@@ -69,13 +69,14 @@ const getStoredMembers = (): Member[] => {
       m.verified = false;
       changed = true;
     }
-    if (!m.role) {
-      if (m.userId === 'dummy-admin-123') {
+    if (!m.role || m.email.toLowerCase() === 'admin@example.com') {
+      const oldRole = m.role;
+      if (m.userId === 'dummy-admin-123' || m.email.toLowerCase() === 'admin@example.com') {
         m.role = UserRole.SUPER_ADMIN;
-      } else {
+      } else if (!m.role) {
         m.role = UserRole.MEMBER;
       }
-      changed = true;
+      if (oldRole !== m.role) changed = true;
     }
     return m;
   });
@@ -107,7 +108,10 @@ export const MemberService = {
   async getUserRole(userId: string): Promise<UserRole> {
     const members = getStoredMembers();
     const member = members.find(m => m.userId === userId);
-    if (member) return member.role;
+    if (member) {
+      if (member.email.toLowerCase() === 'admin@example.com') return UserRole.SUPER_ADMIN;
+      return member.role;
+    }
 
     // Fallback for special cases or if not found
     if (userId === 'dummy-admin-123') return UserRole.SUPER_ADMIN;
@@ -125,12 +129,22 @@ export const MemberService = {
     
     const count = config.memberCounter + 1;
     const year = new Date().getFullYear();
-    const memberId = `INTI-${year}-${count.toString().padStart(4, '0')}`;
-    const slug = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+    const memberId = data.memberId || `INTI-${year}-${count.toString().padStart(4, '0')}`;
+    
+    // Generate an exceptionally unique slug
+    const timestamp = Date.now().toString(36);
+    const randomBits = Math.random().toString(36).substring(2, 10);
+    const baseSlug = (data.name || 'member').toLowerCase().replace(/\s+/g, '-').substring(0, 15);
+    let slug = `${baseSlug}-${timestamp}-${randomBits}`;
+
+    // Verify uniqueness in the local registry
+    while (members.some(m => m.slug === slug)) {
+      slug = `${baseSlug}-${timestamp}-${Math.random().toString(36).substring(2, 10)}`;
+    }
 
     const newMember: Member = {
-      id: Math.random().toString(36).substring(7),
-      memberId: data.memberId || memberId,
+      id: Math.random().toString(36).substring(2, 15),
+      memberId: memberId,
       name: data.name || 'Anonymous Member',
       email: data.email || '',
       password: data.password || 'inti123',
