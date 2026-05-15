@@ -10,6 +10,7 @@ import {
   QrCode, 
   Shield, 
   ShieldCheck,
+  ShieldAlert,
   Settings, 
   Download, 
   Check, 
@@ -71,7 +72,7 @@ export default function Dashboard({ user, role, member }: DashboardProps) {
                   activeTab === 'admin' ? "bg-brand-red text-white shadow-lg" : "text-slate-400 hover:text-brand-gold"
                 )}
               >
-                Management
+                {role === UserRole.SUPER_ADMIN ? 'Registry Command' : 'Management'}
               </button>
               <button 
                 onClick={() => setActiveTab('member')}
@@ -99,7 +100,7 @@ export default function Dashboard({ user, role, member }: DashboardProps) {
 
       <main className="relative z-10 max-w-[1400px] mx-auto px-8 py-10">
         {isAdmin && activeTab === 'admin' ? (
-          <AdminView />
+          <AdminView userRole={role} />
         ) : (
           <MemberView member={member} email={user.email} />
         )}
@@ -179,7 +180,17 @@ function MemberView({ member, email }: { member: Member | null, email: string })
                      Official Verified Member
                    </span>
                    <h2 className="font-serif text-5xl font-black text-brand-ink mb-2">{member.name}</h2>
-                   <p className="text-brand-red font-black text-sm tracking-[0.3em] font-mono mb-10">MEMBER ID: {member.memberId}</p>
+                   <div className="flex items-center gap-3 mb-10">
+                      <p className="text-brand-red font-black text-sm tracking-[0.3em] font-mono">MEMBER ID: {member.memberId}</p>
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border",
+                        member.role === UserRole.SUPER_ADMIN ? "bg-red-50 text-brand-red border-brand-red/30" : 
+                        member.role === UserRole.ADMIN ? "bg-brand-cream text-brand-gold border-brand-gold/30" : 
+                        "bg-brand-cream/40 text-slate-400 border-brand-gold/5"
+                      )}>
+                        {member.role.replace('_', ' ')}
+                      </span>
+                   </div>
                    
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="bg-brand-cream/60 p-5 rounded-[20px] border border-brand-gold/10">
@@ -286,7 +297,7 @@ function MemberView({ member, email }: { member: Member | null, email: string })
   );
 }
 
-function EditMemberModal({ member, onClose, onUpdated }: { member: Member, onClose: () => void, onUpdated: () => void }) {
+function EditMemberModal({ member, onClose, onUpdated, canChangeRole }: { member: Member, onClose: () => void, onUpdated: () => void, canChangeRole?: boolean }) {
   const [formData, setFormData] = useState({ 
     name: member.name, 
     email: member.email, 
@@ -294,7 +305,8 @@ function EditMemberModal({ member, onClose, onUpdated }: { member: Member, onClo
     phone: member.phone || '',
     placeOfBirth: member.placeOfBirth || '',
     dateOfBirth: member.dateOfBirth || '',
-    profilePhotoURL: member.profilePhotoURL || '' 
+    profilePhotoURL: member.profilePhotoURL || '',
+    role: member.role
   });
   const [loading, setLoading] = useState(false);
 
@@ -404,6 +416,21 @@ function EditMemberModal({ member, onClose, onUpdated }: { member: Member, onClo
               />
             </div>
           </div>
+
+          {canChangeRole && (
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest font-black text-slate-400 ml-4">Security Access Level</label>
+              <select 
+                className="w-full bg-brand-cream border-2 border-transparent focus:border-brand-gold outline-none py-4 px-6 rounded-2xl transition-all font-bold text-slate-800 appearance-none cursor-pointer"
+                value={formData.role}
+                onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
+              >
+                <option value={UserRole.MEMBER}>Standard Member Access</option>
+                <option value={UserRole.ADMIN}>Regional Admin Access</option>
+                <option value={UserRole.SUPER_ADMIN}>Universal Super Admin Access</option>
+              </select>
+            </div>
+          )}
           
           <div className="space-y-2">
             <label className="text-[10px] uppercase tracking-widest font-black text-slate-400 ml-4">Profile Photo URL</label>
@@ -430,11 +457,13 @@ function EditMemberModal({ member, onClose, onUpdated }: { member: Member, onClo
   );
 }
 
-function AdminView() {
+function AdminView({ userRole }: { userRole: UserRole | null }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const navigate = useNavigate();
+
+  const isSuperAdmin = userRole === UserRole.SUPER_ADMIN;
 
   useEffect(() => {
     fetchMembers();
@@ -473,6 +502,26 @@ function AdminView() {
       await fetchMembers();
     } catch (error) {
       alert('Verification protocol interrupted.');
+    }
+  };
+
+  const handleToggleRole = async (member: Member) => {
+    if (!isSuperAdmin) return;
+    
+    let nextRole: UserRole = UserRole.MEMBER;
+    if (member.role === UserRole.MEMBER) nextRole = UserRole.ADMIN;
+    else if (member.role === UserRole.ADMIN) nextRole = UserRole.SUPER_ADMIN;
+    else nextRole = UserRole.MEMBER;
+
+    if (nextRole === UserRole.SUPER_ADMIN && !window.confirm('Are you sure you want to grant Super Admin privileges? This provides total system control.')) {
+      return;
+    }
+
+    try {
+      await MemberService.updateMemberRole(member.id, nextRole);
+      await fetchMembers();
+    } catch (error) {
+      alert('Role reassignment failed.');
     }
   };
 
@@ -544,31 +593,60 @@ function AdminView() {
               <table className="w-full text-left">
                 <thead className="bg-brand-cream/50 border-b border-brand-gold/10">
                   <tr>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold">Member Identity</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold hidden md:table-cell">Contact Information</th>
-                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold text-right">Verification</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-gold/5">
-                  {members.map(m => (
-                    <tr 
-                      key={m.id} 
-                      onClick={() => setSelectedMember(m)}
-                      className="group hover:bg-brand-cream/30 transition-all cursor-pointer"
-                    >
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                           <div className="brushstroke-border scale-75 -ml-4 group-hover:scale-90 transition-transform">
-                              <div className="brushstroke-inner w-12 h-12">
-                                 {m.profilePhotoURL ? <img src={m.profilePhotoURL} className="w-full h-full object-cover" /> : <UserIcon className="text-brand-gold w-6 h-6" />}
+                        <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold">Member Identity</th>
+                        <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold hidden md:table-cell text-center">Protocol Role</th>
+                        <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold hidden md:table-cell">Contact Information</th>
+                        <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold text-right">Verification</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-gold/5">
+                      <AnimatePresence mode="popLayout">
+                        {members.map((m, idx) => (
+                          <motion.tr 
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ delay: idx * 0.05 }}
+                            key={m.id} 
+                            onClick={() => setSelectedMember(m)}
+                            className="group hover:bg-brand-cream/30 transition-all cursor-pointer"
+                          >
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-4">
+                                 <div className="brushstroke-border scale-75 -ml-4 group-hover:scale-90 transition-transform">
+                                    <div className="brushstroke-inner w-12 h-12">
+                                       {m.profilePhotoURL ? <img src={m.profilePhotoURL} className="w-full h-full object-cover" /> : <UserIcon className="text-brand-gold w-6 h-6" />}
+                                    </div>
+                                 </div>
+                                 <div>
+                                    <p className="font-black text-slate-800 text-lg tracking-tighter leading-none mb-1">{m.name}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">{m.memberId}</p>
+                                 </div>
                               </div>
-                           </div>
-                           <div>
-                              <p className="font-black text-slate-800 text-lg tracking-tighter leading-none mb-1">{m.name}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">{m.memberId}</p>
-                           </div>
-                        </div>
-                      </td>
+                            </td>
+                            <td className="px-8 py-6 hidden md:table-cell text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <button
+                                  disabled={!isSuperAdmin}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleRole(m);
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border transition-all",
+                                    m.role === UserRole.SUPER_ADMIN ? "bg-red-50 text-brand-red border-brand-red/30" : 
+                                    m.role === UserRole.ADMIN ? "bg-brand-cream text-brand-gold border-brand-gold/30" : 
+                                    "bg-slate-50 text-slate-400 border-slate-200",
+                                    isSuperAdmin && "hover:scale-105 active:scale-95"
+                                  )}
+                                >
+                                  {m.role === UserRole.SUPER_ADMIN ? <ShieldAlert className="w-2.5 h-2.5" /> : m.role === UserRole.ADMIN ? <Shield className="w-2.5 h-2.5" /> : <UserIcon className="w-2.5 h-2.5" />}
+                                  {m.role.replace('_', ' ')}
+                                </button>
+                                {isSuperAdmin && <span className="text-[7px] text-slate-300 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">Click to reassign</span>}
+                              </div>
+                            </td>
                       <td className="px-8 py-6 hidden md:table-cell">
                         <p className="font-black text-slate-600 text-xs tracking-tighter">{m.phone || 'NO CONTACT'}</p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{m.email}</p>
@@ -635,8 +713,9 @@ function AdminView() {
                             </div>
                          </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
+                </AnimatePresence>
                 </tbody>
               </table>
             </div>
@@ -718,7 +797,7 @@ function AdminView() {
       </AnimatePresence>
 
       {/* Add Modal */}
-      {showAddModal && <AddMemberModal onClose={() => setShowAddModal(false)} onAdded={fetchMembers} />}
+      {showAddModal && <AddMemberModal onClose={() => setShowAddModal(false)} onAdded={fetchMembers} canAssignRole={isSuperAdmin} />}
 
       {/* Edit Modal */}
       {memberToEdit && (
@@ -726,6 +805,7 @@ function AdminView() {
           member={memberToEdit} 
           onClose={() => setMemberToEdit(null)} 
           onUpdated={fetchMembers} 
+          canChangeRole={isSuperAdmin}
         />
       )}
       
@@ -1039,7 +1119,7 @@ function ChangePasswordModal({ memberId, onClose }: { memberId: string, onClose:
 }
 
 
-function AddMemberModal({ onClose, onAdded }: { onClose: () => void, onAdded: () => void }) {
+function AddMemberModal({ onClose, onAdded, canAssignRole }: { onClose: () => void, onAdded: () => void, canAssignRole?: boolean }) {
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
@@ -1048,7 +1128,8 @@ function AddMemberModal({ onClose, onAdded }: { onClose: () => void, onAdded: ()
     phone: '',
     placeOfBirth: '',
     dateOfBirth: '',
-    profilePhotoURL: '' 
+    profilePhotoURL: '',
+    role: UserRole.MEMBER
   });
   const [loading, setLoading] = useState(false);
 
@@ -1171,6 +1252,21 @@ function AddMemberModal({ onClose, onAdded }: { onClose: () => void, onAdded: ()
               placeholder="Initial access key"
             />
           </div>
+
+          {canAssignRole && (
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest font-black text-slate-400 ml-4">Authorized Access Level</label>
+              <select 
+                className="w-full bg-brand-cream border-2 border-transparent focus:border-brand-gold outline-none py-4 px-6 rounded-2xl transition-all font-bold text-slate-800 appearance-none cursor-pointer"
+                value={formData.role}
+                onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
+              >
+                <option value={UserRole.MEMBER}>Standard Member Access</option>
+                <option value={UserRole.ADMIN}>Regional Admin Access</option>
+                <option value={UserRole.SUPER_ADMIN}>Universal Super Admin Access</option>
+              </select>
+            </div>
+          )}
           
           <div className="space-y-2">
             <label className="text-[10px] uppercase tracking-widest font-black text-slate-400 ml-4">Profile Photo URL (Optional)</label>

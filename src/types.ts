@@ -19,6 +19,7 @@ export interface Member {
   placeOfBirth?: string;
   dateOfBirth?: string;
   status: MembershipStatus;
+  role: UserRole;
   verified: boolean;
   profilePhotoURL: string;
   joinDate: string;

@@ -17,6 +17,7 @@ const INITIAL_MEMBERS: Member[] = [
     email: 'admin@example.com',
     password: 'admin123',
     status: MembershipStatus.ACTIVE,
+    role: UserRole.SUPER_ADMIN,
     profilePhotoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200',
     joinDate: new Date('2026-01-01').toISOString(),
     slug: 'alexander-premium-vault-882',
@@ -33,6 +34,7 @@ const INITIAL_MEMBERS: Member[] = [
     placeOfBirth: 'Rome, Italy',
     dateOfBirth: '1990-05-20',
     status: MembershipStatus.ACTIVE,
+    role: UserRole.MEMBER,
     profilePhotoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200&h=200',
     joinDate: new Date('2026-02-15').toISOString(),
     slug: 'mario-kent-identity-991',
@@ -67,6 +69,14 @@ const getStoredMembers = (): Member[] => {
       m.verified = false;
       changed = true;
     }
+    if (!m.role) {
+      if (m.userId === 'dummy-admin-123') {
+        m.role = UserRole.SUPER_ADMIN;
+      } else {
+        m.role = UserRole.MEMBER;
+      }
+      changed = true;
+    }
     return m;
   });
 
@@ -95,9 +105,12 @@ export const MemberService = {
   },
 
   async getUserRole(userId: string): Promise<UserRole> {
-    // For dummy mode, dummy-admin-123 is the Super Admin we default to
+    const members = getStoredMembers();
+    const member = members.find(m => m.userId === userId);
+    if (member) return member.role;
+
+    // Fallback for special cases or if not found
     if (userId === 'dummy-admin-123') return UserRole.SUPER_ADMIN;
-    if (userId === 'dummy-mario-456') return UserRole.MEMBER;
     return UserRole.MEMBER;
   },
 
@@ -125,6 +138,7 @@ export const MemberService = {
       placeOfBirth: data.placeOfBirth || '',
       dateOfBirth: data.dateOfBirth || '',
       status: data.status || MembershipStatus.ACTIVE,
+      role: data.role || UserRole.MEMBER,
       verified: data.verified || false,
       profilePhotoURL: data.profilePhotoURL || '',
       joinDate: new Date().toISOString(),
@@ -180,6 +194,15 @@ export const MemberService = {
     const index = members.findIndex(m => m.id === id);
     if (index !== -1) {
       members[index] = { ...members[index], ...data };
+      localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
+    }
+  },
+
+  async updateMemberRole(id: string, role: UserRole): Promise<void> {
+    const members = getStoredMembers();
+    const index = members.findIndex(m => m.id === id);
+    if (index !== -1) {
+      members[index].role = role;
       localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
     }
   },
