@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // -------------------------------------------------------------------------
+    // HELPERS
+    // -------------------------------------------------------------------------
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isAdmin() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); 
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role;
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['name', 'email', 'status', 'slug', 'userId', 'memberId', 'joinDate']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.status in ['Active', 'Inactive'] &&
+             data.slug is string && data.slug.size() >= 20 &&
+             data.userId is string &&
+             data.memberId is string && data.memberId.matches('^INTI-[0-9]{4}-[0-9]{4}$');
+    }
+
+    // -------------------------------------------------------------------------
+    // RULES
+    // -------------------------------------------------------------------------
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      // Allow bootstrap for the specific owner email
+      allow write: if isVerified() && (
+        request.auth.token.email == 'xolovehnz_ss@yahoo.com' || 
+        getUserRole() == 'super_admin'
+      );
+    }
+
+    match /members/{memberId} {
+      // Public verification: Allow direct get
+      allow get: if true; 
+      
+      // List/Query: Fixed to use resource.data
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isAdmin() && isValidMember(incoming());
+      
+      allow update: if (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid)) && 
+                    isValidMember(incoming()) && (
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && getUserRole() == 'super_admin') ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']) ||
+        (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'profilePhotoURL']))
+      );
+    }
+
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

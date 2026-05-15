@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Represents a verified organization member.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "description": "Formatted ID like INTI-2026-0001" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "profilePhotoURL": { "type": "string" },
+        "joinDate": { "type": "string", "format": "date-time" },
+        "slug": { "type": "string", "description": "Secure non-sequential URL identifier" },
+        "userId": { "type": "string", "description": "Firebase Auth UID" }
+      },
+      "required": ["memberId", "name", "email", "status", "slug", "userId"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "User with administrative privileges.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin"] }
+      },
+      "required": ["userId", "email", "role"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global application configuration and counters.",
+      "type": "object",
+      "properties": {
+        "memberCounter": { "type": "integer" }
+      },
+      "required": ["memberCounter"]
+    }
+  },
+  "firestore": {
+    "members": { "schema": "Member", "description": "Collection of all members" },
+    "admins": { "schema": "Admin", "description": "Administrative users" },
+    "config": { "schema": "AppConfig", "description": "Global settings and counters" }
+  }
+}
